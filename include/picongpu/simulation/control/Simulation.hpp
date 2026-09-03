@@ -81,6 +81,7 @@
 #include <array>
 #include <cstddef>
 #include <functional>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -655,6 +656,18 @@ namespace picongpu
             }
 
             size_t allocatableMemory = freeDeviceMemory;
+            /* Where the device memory is the host's, the driver reports the whole machine
+             * as free, and the loop below finds out how much can be allocated by allocating
+             * it. On a device with memory of its own the first attempt fails and the walk
+             * downwards is harmless; here it succeeds, takes the machine, and leaves the
+             * operating system and the driver with nothing. So the walk starts from a bound
+             * where one is given, and the reported figure is only an upper limit for it. */
+            if(char const* const bound = std::getenv("PICONGPU_MAX_DEVICE_MEMORY_GIB"))
+            {
+                size_t const limit = static_cast<size_t>(std::atoll(bound)) * 1024u * 1024u * 1024u;
+                if(limit != 0u && allocatableMemory > limit)
+                    allocatableMemory = limit;
+            }
             bool memAlloced = false;
             // tmpBuffer avoids that the memory is freed before all other MPI ranks created there test buffer
             std::optional<::alpaka::Buf<ComputeDevice, std::byte, AlpakaDim<1>, size_t>> tmpBuffer{};
